@@ -24,20 +24,19 @@ Bu README, **gelecekte yapılacak işler ve görev dağılımı** üzerine hazı
 HomeAutomationProject/
 │
 ├─ pc/
-│ ├─ api/ # K1: API sınıfları ve Board1 UART
-│ └─ app/ # K2: Konsol/GUI uygulama
+│  ├─ api/            # K1: API sınıfları ve Board1 UART
+│  └─ app/            # K2: Konsol/GUI uygulama
 │
 ├─ board1/
-│ ├─ tempfan/ # K3: Sıcaklık ve fan kontrol
-│ └─ keypad_display/ # K4: Keypad ve 7-segment
+│  ├─ tempfan/        # K3: Sıcaklık ve fan kontrol
+│  └─ keypad_display/ # K4: Keypad ve 7-segment
 │
 ├─ board2/
-│ ├─ curtain/ # K5: Step motor ve perde kontrol
-│ └─ sensors_lcd/ # K5: LDR, Pot, BMP180, LCD
+│  ├─ curtain/        # K5: Step motor ve perde kontrol
+│  └─ sensors_lcd/    # K5: LDR, Pot, BMP180, LCD
 │
-├─ docs/ # Rapor, UML, Pin Mapping, Hafıza Haritası
+├─ docs/              # Rapor, UML, Pin Mapping, Hafıza Haritası
 └─ README.md
-
 
 
 > Her klasör ve dosya, ileride ilgili kişinin kodlarını ve testlerini içerecek.
