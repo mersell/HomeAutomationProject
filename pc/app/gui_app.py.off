@@ -1,0 +1,158 @@
+# pc/app/gui_app.py
+
+import tkinter as tk
+from tkinter import messagebox
+import sys
+import os
+import threading
+import time
+
+# K1'in API sınıflarını import etmek için yol ayarı
+# Güvenli import için proje kök dizinini Python yoluna ekle
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+# K1 tarafından yazılan API sınıflarını içe aktar
+from pc.api.air_conditioner import AirConditionerSystemConnection
+from pc.api.curtain_control import CurtainControlSystemConnection 
+
+# --- GLOBAL AYARLAR ---
+COM_PORT = 'COM17'  # Lütfen burayı kendi sanal portunuzun PC tarafına ayarlayın!
+BAUD_RATE = 9600
+UPDATE_INTERVAL = 2000 # MS cinsinden (2 saniye) - Ekran güncelleme hızı
+
+class HomeAutomationGUI:
+    def __init__(self, master):
+        self.master = master
+        master.title("ESOGU Home Automation System (K1/K2 Entegre)")
+        master.geometry("500x550")
+        
+        # K1'in API nesnelerini oluşturma
+        self.ac_system = AirConditionerSystemConnection(COM_PORT, BAUD_RATE)
+        self.curtain_system = CurtainControlSystemConnection(COM_PORT, BAUD_RATE)
+        
+        # Bağlantıyı Açma
+        # NOT: open() metodu, takılmayı önlemek için hata durumunda dahi True döndürüyor.
+        if not self.ac_system.open():
+            messagebox.showerror("Hata", "Seri Port Bağlantısı Başlatılamadı!")
+            master.destroy()
+            return
+        
+        # Arayüz Bileşenlerini Oluşturma
+        self.create_widgets()
+        
+        # Arka Planda Veri Güncelleme Başlatma
+        self.master.after(UPDATE_INTERVAL, self.auto_update_data)
+        
+        # Pencere kapatma olayına on_closing metodunu bağlama
+        master.protocol("WM_DELETE_WINDOW", self.on_closing) 
+
+
+    def create_widgets(self):
+        """GUI bileşenlerini (Label, Buton) oluşturur. (K2 Sorumluluğu)"""
+        
+        # --- 1. KLİMA KONTROL ÇERÇEVESİ (BOARD #1) ---
+        ac_frame = tk.LabelFrame(self.master, text="Klima Kontrol (Board #1)", padx=10, pady=10)
+        ac_frame.pack(padx=10, pady=10, fill="x")
+
+        # 1.1 Veri Etiketleri (R2.4-1)
+        self.ambient_temp_label = self.add_label(ac_frame, "Ortam Sıcaklığı: N/A")
+        self.desired_temp_label = self.add_label(ac_frame, "Hedef Sıcaklık: N/A")
+        self.fan_speed_label = self.add_label(ac_frame, "Fan Hızı: N/A")
+
+        # 1.2 Sıcaklık Ayar Girişi
+        tk.Label(ac_frame, text="Yeni Hedef (°C):").pack(side="left", padx=5, pady=5)
+        self.temp_entry = tk.Entry(ac_frame, width=10)
+        self.temp_entry.pack(side="left", padx=5, pady=5)
+        
+        set_temp_button = tk.Button(ac_frame, text="Sıcaklığı Ayarla", command=self.set_desired_temp)
+        set_temp_button.pack(side="left", padx=5, pady=5)
+        
+        # --- 2. PERDE & DIŞ ORTAM KONTROL ÇERÇEVESİ (BOARD #2) ---
+        curtain_frame = tk.LabelFrame(self.master, text="Perde & Dış Ortam (Board #2)", padx=10, pady=10)
+        curtain_frame.pack(padx=10, pady=10, fill="x")
+
+        # 2.1 Veri Etiketleri (R2.2.5-1)
+        self.outdoor_temp_label = self.add_label(curtain_frame, "Dış Sıcaklık: N/A")
+        self.outdoor_press_label = self.add_label(curtain_frame, "Dış Basınç: N/A")
+        self.light_intensity_label = self.add_label(curtain_frame, "Işık Şiddeti: N/A")
+        self.curtain_status_label = self.add_label(curtain_frame, "Perde Durumu: N/A")
+
+        # 2.2 Perde Ayar Girişi (R2.2.4-1)
+        tk.Label(curtain_frame, text="Hedef Perde (% 0-100):").pack(side="left", padx=5, pady=5)
+        self.curtain_entry = tk.Entry(curtain_frame, width=10)
+        self.curtain_entry.pack(side="left", padx=5, pady=5)
+        
+        set_curtain_button = tk.Button(curtain_frame, text="Perdeyi Ayarla", command=self.set_desired_curtain)
+        set_curtain_button.pack(side="left", padx=5, pady=5)
+
+
+    def add_label(self, frame, text):
+        """Kolayca Label eklemek için yardımcı fonksiyon."""
+        label = tk.Label(frame, text=text, anchor="w")
+        label.pack(fill="x", pady=2)
+        return label
+
+    def auto_update_data(self):
+        """
+        K1'in update() metodunu çağırır ve GUI'yi günceller.
+        """
+        # Board #1 Verilerini Güncelleme
+        self.ac_system.update()
+        
+        # Board #2 Verilerini Güncelleme
+        self.curtain_system.update() 
+        
+        # Board #1 verilerini GUI'ye yansıtma (K2 Sorumluluğu)
+        self.ambient_temp_label.config(text=f"Ortam Sıcaklığı: {self.ac_system.getAmbientTemp():.1f} °C")
+        self.desired_temp_label.config(text=f"Hedef Sıcaklık: {self.ac_system.getDesiredTemp():.1f} °C")
+        self.fan_speed_label.config(text=f"Fan Hızı: {self.ac_system.getFanSpeed()} rps")
+
+        # Board #2 verilerini GUI'ye yansıtma (K2 Sorumluluğu)
+        self.outdoor_temp_label.config(text=f"Dış Sıcaklık: {self.curtain_system.getOutdoorTemp():.1f} °C")
+        self.outdoor_press_label.config(text=f"Dış Basınç: {self.curtain_system.getOutdoorPress():.1f} hPa")
+        self.light_intensity_label.config(text=f"Işık Şiddeti: {self.curtain_system.getLightIntensity():.1f} Lux")
+        self.curtain_status_label.config(text=f"Perde Durumu: {self.curtain_system.getCurtainStatus():.1f} %")
+        
+        # Belirli aralıklarla kendini tekrar çağırır.
+        self.master.after(UPDATE_INTERVAL, self.auto_update_data)
+
+
+    def set_desired_temp(self):
+        """Klima ayar butonuna basıldığında hedef sıcaklığı API'ye yollar."""
+        try:
+            temp_str = self.temp_entry.get()
+            desired_temp = float(temp_str)
+            
+            # K1'in setDesiredTemp() metodunu çağır
+            if self.ac_system.setDesiredTemp(desired_temp):
+                messagebox.showinfo("Başarılı", f"Hedef sıcaklık {desired_temp}°C olarak ayarlandı.")
+            else:
+                messagebox.showerror("Hata", f"Sıcaklık {desired_temp}°C, geçerli aralık (10.0-50.0) dışında.")
+        except ValueError:
+            messagebox.showerror("Hata", "Lütfen geçerli bir sayı giriniz.")
+            
+    def set_desired_curtain(self):
+        """Perde ayar butonuna basıldığında perde durumunu API'ye yollar."""
+        try:
+            curtain_str = self.curtain_entry.get()
+            desired_curtain = float(curtain_str)
+            
+            # K1'in setCurtainStatus() metodunu çağır
+            if self.curtain_system.setCurtainStatus(desired_curtain):
+                messagebox.showinfo("Başarılı", f"Hedef perde durumu %{desired_curtain:.1f} olarak ayarlandı.")
+            else:
+                messagebox.showerror("Hata", f"Perde durumu %{desired_curtain:.1f}, geçerli aralık (0-100) dışında.")
+        except ValueError:
+            messagebox.showerror("Hata", "Lütfen geçerli bir sayı giriniz.")
+            
+    def on_closing(self):
+        """Pencere kapatıldığında her iki bağlantıyı da kapatır. (R2.3-1 close metodu)"""
+        self.ac_system.close()
+        self.curtain_system.close() 
+        self.master.destroy()
+
+# --- Uygulamayı Başlatma ---
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = HomeAutomationGUI(root)
+    root.mainloop()
