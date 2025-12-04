@@ -1,5 +1,5 @@
 # PICSimLab Pin Mapping
-## Microcontroller: PIC16F877A
+## Microcontroller: PIC16F877a
 
 ---
 
