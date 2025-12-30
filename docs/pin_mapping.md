@@ -35,26 +35,26 @@
 
 ## BOARD #2 – Curtain Control System
 
-| Module | Signal | PIC Pin | Port | Type |
-|--------|--------|---------|------|------|
-| Step Motor | IN1 | RD0 | PORTD.0 | Digital Output |
-| Step Motor | IN2 | RD1 | PORTD.1 | Digital Output |
-| Step Motor | IN3 | RD2 | PORTD.2 | Digital Output |
-| Step Motor | IN4 | RD3 | PORTD.3 | Digital Output |
-| LDR Sensor | A0 | RA0 | AN0 | Analog Input |
-| LDR Sensor | D0 | RB0 | PORTB.0 | Digital Input |
-| Potentiometer | POT1 | RA1 | AN1 | Analog Input |
-| BMP180 | SDA | RC4 | SDA | I2C Data |
-| BMP180 | SCL | RC3 | SCL | I2C Clock |
-| LCD | D0 | RD0 | PORTD.0 | Digital Output |
-| LCD | D1 | RD1 | PORTD.1 | Digital Output |
-| LCD | D2 | RD2 | PORTD.2 | Digital Output |
-| LCD | D3 | RD3 | PORTD.3 | Digital Output |
-| LCD | D4 | RD4 | PORTD.4 | Digital Output |
-| LCD | D5 | RD5 | PORTD.5 | Digital Output |
-| LCD | D6 | RD6 | PORTD.6 | Digital Output |
-| LCD | D7 | RD7 | PORTD.7 | Digital Output |
-| LCD | RS | RE0 | PORTE.0 | Digital Output |
-| LCD | EN | RE1 | PORTE.1 | Digital Output |
-| UART | RX | RC7 | RX | UART |
-| UART | TX | RC6 | TX | UART |
+|| Module        | Signal | PIC Pin | Port    | Type           |
+| ------------- | ------ | ------- | ------- | -------------- |
+| Step Motor    | IN1    | RB4     | PORTB.4 | Digital Output |
+| Step Motor    | IN2    | RB5     | PORTB.5 | Digital Output |
+| Step Motor    | IN3    | RB6     | PORTB.6 | Digital Output |
+| Step Motor    | IN4    | RB7     | PORTB.7 | Digital Output |
+| LDR Sensor    | A0     | RA0     | AN0     | Analog Input   |
+| LDR Sensor    | D0     | RB0     | PORTB.0 | Digital Input  |
+| Potentiometer | POT1   | RA1     | AN1     | Analog Input   |
+| BMP180        | SDA    | RC4     | SDA     | I2C Data       |
+| BMP180        | SCL    | RC3     | SCL     | I2C Clock      |
+| LCD           | D0     | RD0     | PORTD.0 | Digital Output |
+| LCD           | D1     | RD1     | PORTD.1 | Digital Output |
+| LCD           | D2     | RD2     | PORTD.2 | Digital Output |
+| LCD           | D3     | RD3     | PORTD.3 | Digital Output |
+| LCD           | D4     | RD4     | PORTD.4 | Digital Output |
+| LCD           | D5     | RD5     | PORTD.5 | Digital Output |
+| LCD           | D6     | RD6     | PORTD.6 | Digital Output |
+| LCD           | D7     | RD7     | PORTD.7 | Digital Output |
+| LCD           | RS     | RE0     | PORTE.0 | Digital Output |
+| LCD           | EN     | RE1     | PORTE.1 | Digital Output |
+| UART          | RX     | RC7     | RX      | UART           |
+| UART          | TX     | RC6     | TX      | UART           |
