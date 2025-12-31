@@ -1,127 +1,157 @@
-# pc/api/air_conditioner.py
-
+## ==========================================================
+# This source file was written and implemented by
+# Student ID: 152120211116 
+# Name: Merve Selçuk
+# ==========================================================
+#  pc/api/air_conditioner.py
+import time
 from .connection_base import HomeAutomationSystemConnection
-# Bu dosya, connection_base.py dosyasındaki ana sınıfı kullanmak için gereklidir.
 
-# UART Komutlarının Tanımlanması (Sadece Bilgi Amaçlı, Koda Dahil Değil)
-# GET Komutları: 0b00000xxx
+# =========================================================================
+# UART COMMAND DEFINITIONS
+# These constants define the protocol used to communicate with Board #1.
+# Matches the Assembly definitions in 'Board1.asm'.
+# =========================================================================
+
+# GET Commands: 0b00000xxx (Requests data from PIC)
 GET_DESIRED_TEMP_LOW  = 0b00000001
 GET_DESIRED_TEMP_HIGH = 0b00000010
-GET_AMBIENT_TEMP_LOW  = 0b00000011 # [cite: 675]
-GET_AMBIENT_TEMP_HIGH = 0b00000100 # [cite: 675]
-GET_FAN_SPEED         = 0b00000101 # [cite: 675]
+GET_AMBIENT_TEMP_LOW  = 0b00000011 # Request Ambient Temp Fractional Part
+GET_AMBIENT_TEMP_HIGH = 0b00000100 # Request Ambient Temp Integral Part
+GET_FAN_SPEED         = 0b00000101 # Request Fan Speed (rps)
 
-# SET Komutları: 0b1x t5 t4 t3 t2 t1 t0 (10x veya 11x)
-SET_LOW_MASK  = 0b10000000 # Kesirli kısım için
-SET_HIGH_MASK = 0b11000000 # Tam kısım için
+# SET Commands: Bitmasks for sending data to PIC
+# Format: 10xxxxxx (Low Byte) and 11xxxxxx (High Byte)
+SET_LOW_MASK  = 0b10000000 # Mask for Fractional Part (Bit 7=1, Bit 6=0)
+SET_HIGH_MASK = 0b11000000 # Mask for Integral Part   (Bit 7=1, Bit 6=1)
 
 class AirConditionerSystemConnection(HomeAutomationSystemConnection):
     """
-    Board #1 (Klima Sistemi) ile iletişimi yönetir. (R2.3-1)
+    Manages communication with Board #1 (Air Conditioner System).
+    Implements requirements [R2.3-1] and handles the specific UART protocol.
     """
     def __init__(self, port: str, rate: int):
         super().__init__(port, rate)
-        # Sınıf üye verilerini tanımla [cite: 736-738]
-        self.desiredTemperature: float = 0.0   # [R2.1.1-1]
-        self.ambientTemperature: float = 0.0   # [R2.1.1-4]
-        self.fanSpeed: int = 0                 # [R2.1.1-5]
+        # Initialize member variables [R2.1.1 Data Structures]
+        self.desiredTemperature: float = 0.0   # Holds the target temperature
+        self.ambientTemperature: float = 0.0   # Holds the current sensor reading
+        self.fanSpeed: int = 0                 # Holds the current fan speed in rps
 
-    # --- YARDIMCI FONKSİYONLAR ---
+    # --- HELPER FUNCTIONS ---
 
     def _bytes_to_float(self, integral_byte: int, fractional_byte: int) -> float:
         """
-        PIC'ten gelen 6-bitlik tam ve kesirli kısımları float değere çevirir.
-        Gereksinimler [cite: 675]'e göre, gelen byte'lar 6 bitlik değeri içerir (0-63).
-        Keypad örneği: 29.5 -> 29 (tam), 5 (kesirli, 0.1 basamağı)
-        """
-        integral = integral_byte & 0x3F # Alt 6 biti al (t5..t0)
-        fractional = fractional_byte & 0x3F # Alt 6 biti al (t5..t0)
+        Converts two separate bytes received from the PIC into a single float value.
         
-        # Sıcaklık değeri (Tam Kısım + Kesirli Kısım / 10)
+        Logic:
+        - The PIC sends data in two parts: Integral (Integer) and Fractional.
+        - Each part is stored in the lower 6 bits (0-63).
+        - Example: 29.5 -> Integral: 29, Fractional: 5
+        """
+        integral = integral_byte & 0x3F     # Extract lower 6 bits
+        fractional = fractional_byte & 0x3F # Extract lower 6 bits
+        
+        # Combine: Integral + (Fractional / 10.0)
         return float(integral) + float(fractional) / 10.0
 
     def _read_and_process(self, command_byte: int) -> int:
-        """UART komutunu gönderir ve tek bir byte cevap okur."""
+        """
+        Sends a single command byte to the PIC and waits for a single byte response.
+        Used for all GET operations.
+        """
         if self._connection and self._connection.is_open:
-            self._connection.write(bytes([command_byte]))
-            response = self._connection.read(1)
-            if response:
-                return response[0]
+            try:
+                self._connection.write(bytes([command_byte]))
+                response = self._connection.read(1) # Blocking read with timeout
+                if response:
+                    return response[0]
+            except Exception as e:
+                print(f"UART Error: {e}")
         return 0
 
-    # --- ANA API FONKSİYONLARI ---
+    # --- MAIN API FUNCTIONS ---
 
     def update(self) -> None:
         """
-        Board #1'den ortam sıcaklığı ve fan hızını günceller. (R2.3-1 - update)
-        [cite: 675]
+        Polls Board #1 to retrieve the latest system status.
+        Updates Ambient Temperature, Fan Speed, and current Desired Temperature.
+        Implements [R2.3-1 - update].
         """
         if not self._connection or not self._connection.is_open:
-           
             return
 
-        print("Board 1 verileri güncelleniyor...")
-
-        # 1. Ortam Sıcaklığını (Ambient Temp) Çek
+        # 1. Retrieve Ambient Temperature (Low and High bytes)
         ambient_frac = self._read_and_process(GET_AMBIENT_TEMP_LOW)
+        time.sleep(0.05) # Short delay to ensure stable UART transmission
         ambient_int  = self._read_and_process(GET_AMBIENT_TEMP_HIGH)
         
+        # Convert raw bytes to float and store
         self.ambientTemperature = self._bytes_to_float(ambient_int, ambient_frac)
-            
-        # 2. Fan Hızını Çek
-        fan_byte = self._read_and_process(GET_FAN_SPEED)
-        self.fanSpeed = fan_byte # rps değeri doğrudan byte olarak okunur
+        time.sleep(0.05)
         
-        # 3. İstenen Sıcaklığı (Desired Temp) Çek (Arayüzde gösterim için)
+        # 2. Retrieve Fan Speed
+        fan_byte = self._read_and_process(GET_FAN_SPEED)
+        self.fanSpeed = fan_byte # Fan speed is a direct byte value (rps)
+        time.sleep(0.05)
+        
+        # 3. Retrieve Desired Temperature (Sync check with GUI)
         desired_frac = self._read_and_process(GET_DESIRED_TEMP_LOW)
+        time.sleep(0.05)
         desired_int  = self._read_and_process(GET_DESIRED_TEMP_HIGH)
         
         self.desiredTemperature = self._bytes_to_float(desired_int, desired_frac)
 
-
     def setDesiredTemp(self, temp: float) -> bool:
         """
-        Board #1'e istenen sıcaklığı gönderir. (R2.3-1 - setDesiredTemp)
-        [cite: 675]
+        Sends a new target temperature to Board #1 using the SET protocol.
+        Implements [R2.3-1 - setDesiredTemp].
         """
         if not self._connection or not self._connection.is_open:
-          
             return False
 
-        # 10.0°C < T < 50.0°C kontrolü (R2.1.2-3)
+        # Validation: Ensure temperature is within the sensor/system range (10.0 - 50.0)
         if not (10.0 <= temp <= 50.0):
-            print(f"Hata: Sıcaklık {temp}°C, geçerli aralık (10.0-50.0) dışında.")
+            print(f"Error: Temperature {temp}°C is out of valid range (10.0-50.0).")
             return False
 
-        # Sıcaklık değerini integral (tam) ve fractional (kesirli) kısımlara ayırma
+        # Split the float value into Integral and Fractional parts
         integral = int(temp)
-        fractional = int(round((temp - integral) * 10)) # 1 ondalık basamağı
+        fractional = int(round((temp - integral) * 10))
 
-        # Komut Hazırlığı (6-bitlik veri + 10/11 komut biti)
-        # Integral Komutu (High Byte): 11xxxxxx | 6 bitlik integral kısmı
+        # Prepare Command Bytes using Bitmasks
+        # High Byte Command: 11xxxxxx | Low Byte Command: 10xxxxxx
         integral_cmd_byte = SET_HIGH_MASK | (integral & 0x3F) 
-
-        # Fractional Komutu (Low Byte): 10xxxxxx | 6 bitlik fractional kısmı
         fractional_cmd_byte = SET_LOW_MASK | (fractional & 0x3F)
 
-        # UART Üzerinden Gönderme
+        # --- TRANSMISSION SEQUENCE ---
+        
+        # 1. Send the Fractional Part (Low Byte) first
         self._connection.write(bytes([fractional_cmd_byte]))
+        
+        # CRITICAL DELAY: 
+        # The PIC firmware uses a polling loop inside the main loop (multiplexing).
+        # We must pause briefly to allow the PIC to process the first byte 
+        # before sending the second one.
+        time.sleep(0.1)  # 100ms delay
+        
+        # 2. Send the Integral Part (High Byte)
         self._connection.write(bytes([integral_cmd_byte]))
+        # -----------------------------
         
         self.desiredTemperature = temp
-        print(f"Hedef sıcaklık {temp}°C olarak ayarlandı. UART komutları gönderildi.")
+        print(f"Set Desired Temp: {temp}°C (Commands Sent).")
         return True
 
-    # --- GET METOTLARI (Verileri Yerel Üyeden Döndürür) ---
+    # --- GETTERS (Retrieve locally stored values) ---
     
     def getAmbientTemp(self) -> float:
-        """Ortam sıcaklığını döndürür."""
+        """Returns the last known Ambient Temperature."""
         return self.ambientTemperature
     
     def getFanSpeed(self) -> int:
-        """Fan hızını döndürür."""
+        """Returns the last known Fan Speed."""
         return self.fanSpeed
 
     def getDesiredTemp(self) -> float:
-        """İstenen sıcaklığı döndürür."""
+        """Returns the last known Desired Temperature."""
         return self.desiredTemperature
