@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project-private xmlns="http://www.netbeans.org/ns/project-private/1">
+    <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
+    <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
+        <group>
+            <file>file:/C:/MPLAB_Projects/MPProjects/Ev_Otomasyon_Deneme2.X/4BMP180_LCD.asm</file>
+            <file>file:/C:/MPLAB_Projects/MPProjects/Ev_Otomasyon_Deneme2.X/comman.inc</file>
+            <file>file:/C:/MPLAB_Projects/MPProjects/Ev_Otomasyon_Deneme2.X/0Global.asm</file>
+            <file>file:/C:/MPLAB_Projects/MPProjects/Ev_Otomasyon_Deneme2.X/1main.asm</file>
+            <file>file:/C:/MPLAB_Projects/MPProjects/Ev_Otomasyon_Deneme2.X/5UART.asm</file>
+            <file>file:/C:/MPLAB_Projects/MPProjects/Ev_Otomasyon_Deneme2.X/2ReadingLDRPOTviaADC.asm</file>
+            <file>file:/C:/MPLAB_Projects/MPProjects/Ev_Otomasyon_Deneme2.X/3StepMotor.asm</file>
+        </group>
+    </open-files>
+</project-private>

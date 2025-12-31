@@ -1,0 +1,177 @@
+Microchip MPLAB XC8 PIC(R) Assembler V3.10
+
+Linker command line:
+
+-W-3 \
+  --edf=C:\Program Files\Microchip\xc8\v3.10\pic\dat\20250813170317_en.msgs \
+  -cs -h+dist/default/production\Ev_Otomasyon_Deneme2.X.production.sym \
+  --cmf=dist/default/production\Ev_Otomasyon_Deneme2.X.production.cmf -z \
+  -Q16F877A -oC:\Users\betul\AppData\Local\Temp\xcAs6ng.0\driver_tmp_3.o \
+  --fixupoverflow=error -ver=XC8 PIC(R) Assembler --fixupoverflow=lstwarn \
+  -Mdist/default/production/Ev_Otomasyon_Deneme2.X.production.map -E1 \
+  -ACODE=00h-07FFhx4 -ASTRCODE=00h-01FFFh -ASTRING=00h-0FFhx32 \
+  -ACONST=00h-0FFhx32 -AENTRY=00h-0FFhx32 -ACOMMON=070h-07Fh \
+  -ABANK0=020h-06Fh -ABANK1=0A0h-0EFh -ABANK2=0110h-016Fh \
+  -ABANK3=0190h-01EFh -ARAM=020h-06Fh,0A0h-0EFh,0110h-016Fh,0190h-01EFh \
+  -AABS1=020h-07Fh,0A0h-0EFh,0110h-016Fh,0190h-01EFh -ASFR0=00h-01Fh \
+  -ASFR1=080h-09Fh -ASFR2=0100h-010Fh -ASFR3=0180h-018Fh \
+  -ACONFIG=02007h-02007h -DCONFIG=2 -AIDLOC=02000h-02003h -DIDLOC=2 \
+  -AEEDATA=00h-0FFh/02100h -DEEDATA=2 -DCODE=2 -DSTRCODE=2 -DSTRING=2 \
+  -DCONST=2 -DENTRY=2 build/default/production/0Global.o \
+  build/default/production/1main.o \
+  build/default/production/2ReadingLDRPOTviaADC.o \
+  build/default/production/3StepMotor.o \
+  build/default/production/4BMP180_LCD.o build/default/production/5UART.o 
+
+Object code version is 3.11
+
+Machine type is 16F877A
+
+
+
+                Name                               Link     Load   Length Selector   Space Scale
+build/default/production/0Global.o
+                udata_bank0                          2C       2C        7       20       1
+                config                             2007     2007        1        0       4
+build/default/production/1main.o
+                config                             2007     2007        1        0       4
+                mainCode                            6F2      6F2      10E      DE4       0
+                resetVector                         4F6      4F6        3      9EC       0
+                udata_bank0                          33       33        6       20       1
+build/default/production/2ReadingLDRPOTviaADC.o
+                adcCode                             4F9      4F9       39      9F2       0
+                udata_bank0                          3C       3C        2       20       1
+build/default/production/3StepMotor.o
+                motorCode                           532      532       51      A64       0
+                udata_bank0                          3E       3E        1       20       1
+build/default/production/4BMP180_LCD.o
+                bmpLcdCode                          61C      61C       D6      C38       0
+                udata_bank0                          20       20        C       20       1
+build/default/production/5UART.o
+                uartCode                            583      583       99      B06       0
+                udata_bank0                          39       39        3       20       1
+
+TOTAL           Name                               Link     Load   Length     Space
+        CLASS   CODE           
+                mainCode                            6F2      6F2      10E         0
+                resetVector                         4F6      4F6        3         0
+                adcCode                             4F9      4F9       39         0
+                motorCode                           532      532       51         0
+                bmpLcdCode                          61C      61C       D6         0
+                uartCode                            583      583       99         0
+
+        CLASS   STRCODE        
+
+        CLASS   STRING         
+
+        CLASS   CONST          
+
+        CLASS   ENTRY          
+
+        CLASS   COMMON         
+
+        CLASS   BANK0          
+                udata_bank0                          2C       2C        7         1
+                udata_bank0                          33       33        6         1
+                udata_bank0                          3C       3C        2         1
+                udata_bank0                          3E       3E        1         1
+                udata_bank0                          20       20        C         1
+                udata_bank0                          39       39        3         1
+
+        CLASS   BANK1          
+
+        CLASS   BANK2          
+
+        CLASS   BANK3          
+
+        CLASS   RAM            
+
+        CLASS   ABS1           
+
+        CLASS   SFR0           
+
+        CLASS   SFR1           
+
+        CLASS   SFR2           
+
+        CLASS   SFR3           
+
+        CLASS   CONFIG         
+                config                             2007     2007        1         4
+
+        CLASS   IDLOC          
+
+        CLASS   EEDATA         
+
+
+
+SEGMENTS        Name                           Load    Length   Top    Selector   Space  Class     Delta
+
+                udata_bank0                    000020  00001F  00003F        20       1  BANK0       1
+                resetVector                    0004F6  000003  0004F9       9EC       0  CODE        2
+                adcCode                        0004F9  000039  000532       9F2       0  CODE        2
+                motorCode                      000532  000051  000583       A64       0  CODE        2
+                uartCode                       000583  000099  00061C       B06       0  CODE        2
+                bmpLcdCode                     00061C  0000D6  0006F2       C38       0  CODE        2
+                mainCode                       0006F2  00010E  000800       DE4       0  CODE        2
+
+
+UNUSED ADDRESS RANGES
+
+        Name                Unused          Largest block    Delta
+        BANK0            003F-006F             31           1
+        BANK1            00A0-00EF             50           1
+        BANK2            0110-016F             60           1
+        BANK3            0190-01EF             60           1
+        CODE             0000-04F5            4F6           2
+                         0800-1FFF            800
+        COMMON           0070-007F             10           1
+        CONST            0000-04F5            100           2
+                         0800-1FFF            100
+        EEDATA           2100-21FF            100           2
+        ENTRY            0000-04F5            100           2
+                         0800-1FFF            100
+        IDLOC            2000-2003              4           2
+        RAM              003F-006F             31           1
+                         00A0-00EF             50
+                         0110-016F             60
+                         0190-01EF             60
+        SFR0             0000-001F             20           1
+        SFR1             0080-009F             20           1
+        SFR2             0100-010F             10           1
+        SFR3             0180-018F             10           1
+        STRCODE          0000-04F5            4F6           2
+                         0800-1FFF           1800
+        STRING           0000-04F5            100           2
+                         0800-1FFF            100
+
+                                  Symbol Table
+
+__H__absolute__    __absolute__ 0000  __HadcCode         adcCode      0000
+__HbmpLcdCode      bmpLcdCode   0000  __Hcode            code         0000
+__Hconfig          config       2008  __Hdata            data         0000
+__Hedata           edata        0000  __HmainCode        mainCode     0000
+__HmotorCode       motorCode    0000  __HresetVector     resetVector  0000
+__Hspace_0         (abs)        0800  __Hspace_1         (abs)        003F
+__Hspace_3         (abs)        0000  __Hspace_4         (abs)        400F
+__HuartCode        uartCode     0000  __Hudata           udata        0000
+__Hudata_bank0     udata_bank0  0000  __Hudata_bank1     udata_bank1  0000
+__Hudata_bank2     udata_bank2  0000  __Hudata_bank3     udata_bank3  0000
+__Hudata_shr       udata_shr    0000  __L__absolute__    __absolute__ 0000
+__LadcCode         adcCode      0000  __LbmpLcdCode      bmpLcdCode   0000
+__Lcode            code         0000  __Lconfig          config       0000
+__Ldata            data         0000  __Ledata           edata        0000
+__LmainCode        mainCode     0000  __LmotorCode       motorCode    0000
+__LresetVector     resetVector  0000  __Lspace_0         (abs)        0000
+__Lspace_1         (abs)        0000  __Lspace_3         (abs)        0000
+__Lspace_4         (abs)        0000  __LuartCode        uartCode     0000
+__Ludata           udata        0000  __Ludata_bank0     udata_bank0  0000
+__Ludata_bank1     udata_bank1  0000  __Ludata_bank2     udata_bank2  0000
+__Ludata_bank3     udata_bank3  0000  __Ludata_shr       udata_shr    0000
+__S0               (abs)        0800  __S1               (abs)        003F
+__S3               (abs)        0000  cur_curtain_status udata_bank0  002C
+des_curtain_status udata_bank0  002D  light_intensity    udata_bank0  0032
+outdoor_press      udata_bank0  0030  outdoor_temp       udata_bank0  002E
+process_curtain    motorCode    0532  read_sensors       adcCode      04F9
+uart_init          uartCode     0583  uart_process       uartCode     05A3
+update_display     bmpLcdCode   061C  
