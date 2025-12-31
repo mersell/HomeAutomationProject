@@ -1,202 +1,648 @@
-# pc/app/gui_app.py - Final Sürümü (Sıcaklık ve Perde için Manuel Giriş Destekli)
-
-from tkinter import messagebox
+# pc/app/gui_app1.py - Akıllı Ev Otomasyon Sistemi (Multi-Page GUI)
+# ===========================================================================
+# Written and implemented by Şevval Ayça Çerence (Student ID: 152120211128).
+# ===========================================================================
+from tkinter import messagebox, Canvas
+import tkinter as tk
+from PIL import Image, ImageTk
 import sys
 import os
 
-# YENİ: ttkbootstrap (ttk) import edilir
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+
+# Add project root directory to sys.path to allow safe importing of API modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-# K1 tarafından yazılan API sınıflarını içe aktar
+# API classes used for UART-based communication with the boards
 from pc.api.air_conditioner import AirConditionerSystemConnection
-from pc.api.curtain_control import CurtainControlSystemConnection 
+from pc.api.curtain_control import CurtainControlSystemConnection
 
-# --- GLOBAL AYARLAR ---
-COM_PORT = 'COM17'  # Lütfen burayı kendi sanal portunuzun PC tarafına ayarlayın!
+# =============================================================================
+# GLOBAL CONFIGURATION PARAMETERS
+# =============================================================================
+
+COM_PORT_AC = 'COM8'
+COM_PORT_CURTAIN = 'COM5'
 BAUD_RATE = 9600
-UPDATE_INTERVAL = 2000 # MS cinsinden (2 saniye)
 
-class HomeAutomationGUI:
-    def __init__(self):
-        self.master = ttk.Window(themename="superhero") 
-        master = self.master 
+TEMP_MIN = 16.0
+TEMP_MAX = 30.0
+
+UPDATE_INTERVAL = 500
+
+THEME_NAME = "superhero"
+
+
+BG_PATH = os.path.join(os.path.dirname(__file__), "assets", "bg_house.png")
+BG_OVERLAY_COLOR = (11, 26, 42)  
+BG_OVERLAY_ALPHA = 0.85  
+
+# Font
+FONT_BASLIK = ("Segoe UI", 22, "bold")
+FONT_ALT_BASLIK = ("Segoe UI", 12)
+FONT_DEGER = ("Segoe UI", 13)
+FONT_ETIKET = ("Segoe UI", 11)
+FONT_KUCUK = ("Segoe UI", 10)
+
+
+# =============================================================================
+# ARKA PLAN FRAME (Canvas + Resim)
+# =============================================================================
+class ArkaplanFrame(tk.Frame):
+    """Arka planda resim gösteren özel frame."""
+    
+    def __init__(self, parent):
+        super().__init__(parent)
         
-        master.title("ESOGU Home Automation System")
-        master.geometry("650x650")
+        self.bg_original = None
+        self.bg_tk = None
+        self._last_size = (0, 0)
         
-        self.ac_system = AirConditionerSystemConnection(COM_PORT, BAUD_RATE)
-        self.curtain_system = CurtainControlSystemConnection(COM_PORT, BAUD_RATE)
+       
+        self.canvas = Canvas(self, highlightthickness=0, bd=0, bg="#0b1a2a")
+        self.canvas.pack(fill="both", expand=True)
         
-        if not self.ac_system.open():
-            messagebox.showerror("Hata", "Seri Port Bağlantısı Başlatılamadı!")
-            master.destroy()
+        
+        self._load_image()
+        
+        
+        self.bind("<Configure>", self._on_resize)
+    
+    def _load_image(self):
+        """Arka plan resmini yükler."""
+        try:
+            if os.path.exists(BG_PATH):
+                img = Image.open(BG_PATH).convert("RGBA")
+                
+                overlay = Image.new("RGBA", img.size, 
+                                   (*BG_OVERLAY_COLOR, int(255 * BG_OVERLAY_ALPHA)))
+                img = Image.alpha_composite(img, overlay)
+                self.bg_original = img
+                print(f"[Arka Plan] Resim yüklendi: {BG_PATH}")
+            else:
+                print(f"[Arka Plan] Resim bulunamadı: {BG_PATH}")
+        except Exception as e:
+            print(f"[Arka Plan] Yükleme hatası: {e}")
+    
+    def _on_resize(self, event=None):
+        """Pencere boyutu değiştiğinde arka planı günceller."""
+        w = self.winfo_width()
+        h = self.winfo_height()
+        
+        if w < 50 or h < 50:
             return
         
-        self.create_widgets()
-        self.master.after(UPDATE_INTERVAL, self.auto_update_data)
-        master.protocol("WM_DELETE_WINDOW", self.on_closing) 
-
-
-    def create_widgets(self):
-        """GUI bileşenlerini (Label, Buton, Slider, Entry) oluşturur."""
         
-        # --- 1. KLİMA KONTROL ÇERÇEVESİ (BOARD #1) ---
-        ac_frame = ttk.Labelframe(self.master, text="Klima Kontrol (Board #1)", padding=20, bootstyle="info")
-        ac_frame.pack(padx=10, pady=10, fill="x")
-
-        # 1.1 Veri Etiketleri
-        self.ambient_temp_label = self.add_label(ac_frame, "Ortam Sıcaklığı: N/A")
-        self.desired_temp_label = self.add_label(ac_frame, "Hedef Sıcaklık: N/A")
-        self.fan_speed_label = self.add_label(ac_frame, "Fan Hızı: N/A")
-
-        # 1.2 Sıcaklık Ayar Girişi (SLIDER + MANUEL GİRİŞ)
+        if (w, h) == self._last_size:
+            return
+        self._last_size = (w, h)
         
-        # Slider ve Buton Grubu
-        slider_frame = ttk.Frame(ac_frame)
-        slider_frame.pack(pady=10)
-
-        ttk.Label(slider_frame, text="Slider Ayarı (°C):").pack(side="left", padx=5)
-        self.slider_value_label = ttk.Label(slider_frame, text="25.0", width=4)
-        self.slider_value_label.pack(side="left", padx=5)
+        if self.bg_original is None:
+            return
         
-        self.temp_slider = ttk.Scale(slider_frame, 
-                                     from_=10.0, to=50.0, 
-                                     orient="horizontal",
-                                     command=self.update_slider_label, 
-                                     length=200, 
-                                     bootstyle="info")
-        self.temp_slider.set(25.0) 
-        self.temp_slider.pack(side="left", padx=10)
-        
-        set_slider_button = ttk.Button(slider_frame, text="SLIDER İLE AYARLA", command=self.set_desired_temp_slider, bootstyle="success")
-        set_slider_button.pack(side="left", padx=5)
-
-        # Manuel Giriş Grubu
-        manual_temp_frame = ttk.Frame(ac_frame)
-        manual_temp_frame.pack(pady=10)
-        
-        ttk.Label(manual_temp_frame, text="Veya Manuel Giriş (°C):").pack(side="left", padx=5)
-        self.manual_temp_entry = ttk.Entry(manual_temp_frame, width=10)
-        self.manual_temp_entry.pack(side="left", padx=5)
-        
-        set_manual_temp_button = ttk.Button(manual_temp_frame, text="MANUEL AYARLA", command=self.set_desired_temp_manual, bootstyle="primary")
-        set_manual_temp_button.pack(side="left", padx=5)
-
-        
-        # --- 2. PERDE & DIŞ ORTAM KONTROL ÇERÇEVESİ (BOARD #2) ---
-        curtain_frame = ttk.Labelframe(self.master, text="Perde & Dış Ortam (Board #2)", padding=20, bootstyle="primary")
-        curtain_frame.pack(padx=10, pady=10, fill="x")
-
-        # 2.1 Veri Etiketleri
-        self.outdoor_temp_label = self.add_label(curtain_frame, "Dış Sıcaklık: N/A")
-        self.outdoor_press_label = self.add_label(curtain_frame, "Dış Basınç: N/A")
-        self.light_intensity_label = self.add_label(curtain_frame, "Işık Şiddeti: N/A")
-        self.curtain_status_label = self.add_label(curtain_frame, "Perde Durumu: N/A")
-
-        # 2.2 Perde Ayar Kontrolü (3 BUTON + MANUEL GİRİŞ)
-        
-        # Sabit Butonlar
-        btn_frame = ttk.Frame(curtain_frame)
-        btn_frame.pack(pady=10)
-
-        ttk.Button(btn_frame, text="AÇ (0%)", command=lambda: self.set_desired_curtain_api(0.0), bootstyle="success").pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="KAPAT (100%)", command=lambda: self.set_desired_curtain_api(100.0), bootstyle="danger").pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="YARIM (50%)", command=lambda: self.set_desired_curtain_api(50.0), bootstyle="secondary").pack(side="left", padx=5)
-
-        # Manuel Giriş Grubu
-        manual_curtain_frame = ttk.Frame(curtain_frame)
-        manual_curtain_frame.pack(pady=10)
-        
-        ttk.Label(manual_curtain_frame, text="Veya Manuel Giriş (%):").pack(side="left", padx=5)
-        self.manual_curtain_entry = ttk.Entry(manual_curtain_frame, width=10)
-        self.manual_curtain_entry.pack(side="left", padx=5)
-        
-        set_manual_curtain_button = ttk.Button(manual_curtain_frame, text="MANUEL AYARLA", command=self.set_desired_curtain_manual, bootstyle="primary")
-        set_manual_curtain_button.pack(side="left", padx=5)
-
-
-    def add_label(self, frame, text):
-        """Kolayca Label eklemek için yardımcı fonksiyon."""
-        label = ttk.Label(frame, text=text, anchor="w", font=("Helvetica", 12))
-        label.pack(fill="x", pady=5)
-        return label
-    
-    def update_slider_label(self, value):
-        """Slider kaydırıldıkça yanındaki Label'ı günceller."""
-        self.slider_value_label.config(text=f"{float(value):.1f}")
-
-
-    def auto_update_data(self):
-        """K1'in update() metodunu çağırır ve GUI'yi günceller."""
-        self.ac_system.update()
-        self.curtain_system.update() 
-        
-        # Board #1 verilerini GUI'ye yansıtma
-        self.ambient_temp_label.config(text=f"Ortam Sıcaklığı: {self.ac_system.getAmbientTemp():.1f} °C")
-        self.desired_temp_label.config(text=f"Hedef Sıcaklık: {self.ac_system.getDesiredTemp():.1f} °C")
-        self.fan_speed_label.config(text=f"Fan Hızı: {self.ac_system.getFanSpeed()} rps")
-
-        # Board #2 verilerini GUI'ye yansıtma
-        self.outdoor_temp_label.config(text=f"Dış Sıcaklık: {self.curtain_system.getOutdoorTemp():.1f} °C")
-        self.outdoor_press_label.config(text=f"Dış Basınç: {self.curtain_system.getOutdoorPress():.1f} hPa")
-        self.light_intensity_label.config(text=f"Işık Şiddeti: {self.curtain_system.getLightIntensity():.1f} Lux")
-        self.curtain_status_label.config(text=f"Perde Durumu: {self.curtain_system.getCurtainStatus():.1f} %")
-        
-        self.master.after(UPDATE_INTERVAL, self.auto_update_data)
-
-    # --- SICAKLIK AYAR METOTLARI (Slider ve Manuel) ---
-
-    def set_desired_temp_slider(self):
-        """Sıcaklığı SLIDER'dan alır ve API'ye yollar."""
-        desired_temp = float(self.temp_slider.get())
-        desired_temp = round(desired_temp, 1) 
-        self._send_temp_to_api(desired_temp)
-
-    def set_desired_temp_manual(self):
-        """Sıcaklığı MANUEL GİRİŞ kutusundan alır ve API'ye yollar."""
         try:
-            desired_temp = float(self.manual_temp_entry.get())
-            self._send_temp_to_api(desired_temp)
-        except ValueError:
-            messagebox.showerror("Hata", "Lütfen Manuel Giriş için geçerli bir sayı giriniz.")
-
-    def _send_temp_to_api(self, desired_temp: float):
-        """Ortak API'ye gönderme mantığı."""
-        if self.ac_system.setDesiredTemp(desired_temp):
-            messagebox.showinfo("Başarılı", f"Hedef sıcaklık {desired_temp}°C olarak ayarlandı.")
-        else:
-            messagebox.showerror("Hata", f"Sıcaklık {desired_temp}°C, geçerli aralık (10.0-50.0) dışında.")
             
-    # --- PERDE AYAR METOTLARI (Buton ve Manuel) ---
+            iw, ih = self.bg_original.size
+            scale = max(w / iw, h / ih)
+            nw, nh = int(iw * scale), int(ih * scale)
+            
+            resized = self.bg_original.resize((nw, nh), Image.LANCZOS)
+            
+            
+            x1 = (nw - w) // 2
+            y1 = (nh - h) // 2
+            cropped = resized.crop((x1, y1, x1 + w, y1 + h))
+            
+            self.bg_tk = ImageTk.PhotoImage(cropped)
+            self.canvas.delete("bg")
+            self.canvas.create_image(0, 0, image=self.bg_tk, anchor="nw", tags="bg")
+        except Exception as e:
+            print(f"[Arka Plan] Resize hatası: {e}")
+
+
+# =============================================================================
+# MAIN APPLICATION CLASS
+# =============================================================================
+
+class AkilliEvApp:
+    """Ana controller sınıfı."""
     
-    def set_desired_curtain_api(self, percentage: float):
-        """BUTONLARDAN gelen sabit perde değerini API'ye yollar."""
-        self._send_curtain_to_api(percentage)
-
-    def set_desired_curtain_manual(self):
-        """PERDEYİ MANUEL GİRİŞ kutusundan alır ve API'ye yollar."""
+    def __init__(self):
+        
+        self.root = tk.Tk()
+        self.root.title("Akıllı Ev Otomasyon Sistemi")
+        self.root.geometry("950x680")
+        self.root.minsize(850, 600)
+        self.root.configure(bg="#0b1a2a")
+        
+       
+        self.style = ttk.Style(THEME_NAME)
+        
+        self.bg_frame = ArkaplanFrame(self.root)
+        self.bg_frame.place(x=0, y=0, relwidth=1, relheight=1)
+        
+        self.container = ttk.Frame(self.root)
+        self.container.place(x=0, y=0, relwidth=1, relheight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+        self.container.grid_columnconfigure(0, weight=1)
+        
+        
+        self.klima_api = None
+        self.perde_api = None
+        self.klima_bagli = False
+        self.perde_bagli = False
+        
+        self._baglantilari_kur()
+        
+        if not self.klima_bagli and not self.perde_bagli:
+            messagebox.showerror(
+                "Bağlantı Hatası",
+                "Hiçbir kart ile bağlantı kurulamadı.\n\n"
+                f"Board #1 (Klima): {COM_PORT_AC}\n"
+                f"Board #2 (Perde): {COM_PORT_CURTAIN}\n\n"
+                "COM port ayarlarını kontrol edin."
+            )
+            self.root.destroy()
+            return
+        
+        self._update_job = None
+        
+        # Create and register all application page frames
+        self.frames = {}
+        for FrameClass in (AnaMenuFrame, KlimaFrame, PerdeFrame):
+            frame = FrameClass(self.container, self)
+            self.frames[FrameClass.__name__] = frame
+            frame.grid(row=0, column=0, sticky="nsew")
+        
+        self.sayfa_goster("AnaMenuFrame")
+        self.root.protocol("WM_DELETE_WINDOW", self.kapat)
+    
+    def _baglantilari_kur(self):
+        """API bağlantılarını açar."""
+        if COM_PORT_AC:
+            try:
+                self.klima_api = AirConditionerSystemConnection(COM_PORT_AC, BAUD_RATE)
+                if self.klima_api.open():
+                    self.klima_bagli = True
+                    print(f"[Klima] {COM_PORT_AC} bağlantısı başarılı")
+                else:
+                    self.klima_api = None
+                    print(f"[Klima] {COM_PORT_AC} açılamadı")
+            except Exception as e:
+                self.klima_api = None
+                print(f"[Klima] Bağlantı hatası: {e}")
+        
+        if COM_PORT_CURTAIN:
+            try:
+                self.perde_api = CurtainControlSystemConnection(COM_PORT_CURTAIN, BAUD_RATE)
+                if self.perde_api.open():
+                    self.perde_bagli = True
+                    print(f"[Perde] {COM_PORT_CURTAIN} bağlantısı başarılı")
+                else:
+                    self.perde_api = None
+                    print(f"[Perde] {COM_PORT_CURTAIN} açılamadı")
+            except Exception as e:
+                self.perde_api = None
+                print(f"[Perde] Bağlantı hatası: {e}")
+    
+    def sayfa_goster(self, sayfa_adi: str):
+        """Belirtilen sayfayı gösterir."""
+        if self._update_job:
+            self.root.after_cancel(self._update_job)
+            self._update_job = None
+        
+        frame = self.frames.get(sayfa_adi)
+        if frame:
+            frame.tkraise()
+            if hasattr(frame, "aktif_ol"):
+                frame.aktif_ol()
+    
+    def guncelleme_planla(self, callback, aralik=UPDATE_INTERVAL):
+        self._update_job = self.root.after(aralik, callback)
+    
+    def kapat(self):
+        if self._update_job:
+            self.root.after_cancel(self._update_job)
+        
         try:
-            desired_curtain = float(self.manual_curtain_entry.get())
-            self._send_curtain_to_api(desired_curtain)
-        except ValueError:
-            messagebox.showerror("Hata", "Lütfen Manuel Giriş için geçerli bir sayı giriniz.")
+            if self.klima_api:
+                self.klima_api.close()
+        except:
+            pass
+        
+        try:
+            if self.perde_api:
+                self.perde_api.close()
+        except:
+            pass
+        
+        self.root.destroy()
+    
+    def calistir(self):
+        self.root.mainloop()
 
-    def _send_curtain_to_api(self, percentage: float):
-        """Ortak API'ye gönderme mantığı."""
-        if self.curtain_system.setCurtainStatus(percentage):
-            messagebox.showinfo("Başarılı", f"Hedef perde durumu %{percentage:.1f} olarak ayarlandı.")
+
+# =============================================================================
+# MAIN MENU FRAME
+# =============================================================================
+
+class AnaMenuFrame(ttk.Frame):
+    """Ana Menü Ekranı."""
+    
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=3)
+        self.grid_rowconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        
+        self._arayuz_olustur()
+    
+    def _arayuz_olustur(self):
+        
+        baslik_frame = ttk.Frame(self)
+        baslik_frame.grid(row=0, column=0, sticky="s", pady=(40, 20))
+        
+        ttk.Label(
+            baslik_frame,
+            text="🏠 Akıllı Ev Otomasyon Sistemi",
+            font=FONT_BASLIK,
+            foreground="white"
+        ).pack()
+        
+        ttk.Label(
+            baslik_frame,
+            text="Ana Menü",
+            font=FONT_ALT_BASLIK,
+            foreground="#8899aa"
+        ).pack(pady=(10, 0))
+        
+        
+        kartlar = ttk.Frame(self)
+        kartlar.grid(row=1, column=0, sticky="n", pady=20)
+        
+        
+        klima_kart = ttk.Labelframe(kartlar, text="❄️ Klima Kontrol", padding=20, bootstyle="info")
+        klima_kart.grid(row=0, column=0, padx=20, pady=10, sticky="nsew")
+        
+        self.lbl_ortam = ttk.Label(klima_kart, text="Ortam Sıcaklığı: N/A", font=FONT_ETIKET)
+        self.lbl_ortam.pack(anchor="w", pady=4)
+        
+        self.lbl_hedef = ttk.Label(klima_kart, text="Hedef Sıcaklık: N/A", font=FONT_ETIKET)
+        self.lbl_hedef.pack(anchor="w", pady=4)
+        
+        self.lbl_fan = ttk.Label(klima_kart, text="Fan Hızı: N/A", font=FONT_ETIKET)
+        self.lbl_fan.pack(anchor="w", pady=4)
+        
+        ttk.Separator(klima_kart, orient="horizontal").pack(fill="x", pady=15)
+        
+        ttk.Button(
+            klima_kart, text="Ayarla",
+            command=lambda: self.controller.sayfa_goster("KlimaFrame"),
+            bootstyle="info-outline", width=18
+        ).pack()
+        
+        
+        perde_kart = ttk.Labelframe(kartlar, text="🪟 Perde Kontrol", padding=20, bootstyle="success")
+        perde_kart.grid(row=0, column=1, padx=20, pady=10, sticky="nsew")
+        
+        self.lbl_isik = ttk.Label(perde_kart, text="Işık Şiddeti: N/A", font=FONT_ETIKET)
+        self.lbl_isik.pack(anchor="w", pady=4)
+        
+        self.lbl_perde_hedef = ttk.Label(perde_kart, text="Hedef Perde: N/A", font=FONT_ETIKET)
+        self.lbl_perde_hedef.pack(anchor="w", pady=4)
+        
+        self.lbl_perde_mevcut = ttk.Label(perde_kart, text="Mevcut Perde: N/A", font=FONT_ETIKET)
+        self.lbl_perde_mevcut.pack(anchor="w", pady=4)
+        
+        ttk.Separator(perde_kart, orient="horizontal").pack(fill="x", pady=15)
+        
+        ttk.Button(
+            perde_kart, text="Ayarla",
+            command=lambda: self.controller.sayfa_goster("PerdeFrame"),
+            bootstyle="success-outline", width=18
+        ).pack()
+        
+        # ===== EXIT =====
+        cikis = ttk.Frame(self)
+        cikis.grid(row=2, column=0, sticky="n", pady=30)
+        
+        ttk.Button(cikis, text="🚪 Çıkış", command=self.controller.kapat,
+                   bootstyle="danger-outline", width=15).pack()
+    
+    def aktif_ol(self):
+        self._verileri_guncelle()
+    
+    def _verileri_guncelle(self):
+        # air conditioner
+        api = self.controller.klima_api
+        if api and self.controller.klima_bagli:
+            try:
+                api.update()
+                self.lbl_ortam.config(text=f"Ortam Sıcaklığı: {api.getAmbientTemp():.1f} °C")
+                self.lbl_hedef.config(text=f"Hedef Sıcaklık: {api.getDesiredTemp():.1f} °C")
+                self.lbl_fan.config(text=f"Fan Hızı: {api.getFanSpeed()} rps")
+            except:
+                self._klima_na()
         else:
-            messagebox.showerror("Hata", f"Perde durumu %{percentage:.1f}, geçerli aralık (0-100) dışında.")
-            
-    def on_closing(self):
-        """Pencere kapatıldığında her iki bağlantıyı da kapatır."""
-        self.ac_system.close()
-        self.curtain_system.close() 
-        self.master.destroy()
+            self._klima_na()
+        
+        # Curtain
+        api = self.controller.perde_api
+        if api and self.controller.perde_bagli:
+            try:
+                api.update()
+                self.lbl_isik.config(text=f"Işık Şiddeti: {api.getLightIntensity():.0f} Lux")
+                self.lbl_perde_hedef.config(text=f"Hedef Perde: {api.getDesiredCurtain():.1f}%")
+                self.lbl_perde_mevcut.config(text=f"Mevcut Perde: {api.getCurtainStatus():.1f}%")
+            except:
+                self._perde_na()
+        else:
+            self._perde_na()
+        
+        self.controller.guncelleme_planla(self._verileri_guncelle)
+    
+    def _klima_na(self):
+        self.lbl_ortam.config(text="Ortam Sıcaklığı: N/A")
+        self.lbl_hedef.config(text="Hedef Sıcaklık: N/A")
+        self.lbl_fan.config(text="Fan Hızı: N/A")
+    
+    def _perde_na(self):
+        self.lbl_isik.config(text="Işık Şiddeti: N/A")
+        self.lbl_perde_hedef.config(text="Hedef Perde: N/A")
+        self.lbl_perde_mevcut.config(text="Mevcut Perde: N/A")
 
-# --- Uygulamayı Başlatma ---
+
+# =============================================================================
+# AIR CONDITIONER FRAME
+# =============================================================================
+class KlimaFrame(ttk.Frame):
+    """Klima Kontrol Ekranı."""
+    
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        
+        self._arayuz_olustur()
+    
+    def _arayuz_olustur(self):
+        
+        ust = ttk.Frame(self)
+        ust.grid(row=0, column=0, sticky="ew", padx=20, pady=15)
+        
+        ttk.Button(ust, text="◀ Geri",
+                   command=lambda: self.controller.sayfa_goster("AnaMenuFrame"),
+                   bootstyle="secondary-outline", width=12).pack(side="left")
+        
+        ttk.Label(ust, text="❄️ Klima Kontrol", font=FONT_BASLIK,
+                  foreground="white").pack(side="left", padx=25)
+        
+       
+        icerik = ttk.Frame(self)
+        icerik.grid(row=1, column=0, sticky="n", padx=40, pady=10)
+        
+        # Sensor measurement data
+
+        veri = ttk.Labelframe(icerik, text="📊 Sensör Verileri", padding=20, bootstyle="info")
+        veri.pack(fill="x", pady=12)
+        
+        self.lbl_ortam = ttk.Label(veri, text="Ortam Sıcaklığı: N/A", font=FONT_DEGER)
+        self.lbl_ortam.pack(anchor="w", pady=6)
+        
+        self.lbl_hedef = ttk.Label(veri, text="Hedef Sıcaklık: N/A", font=FONT_DEGER)
+        self.lbl_hedef.pack(anchor="w", pady=6)
+        
+        self.lbl_fan = ttk.Label(veri, text="Fan Hızı: N/A", font=FONT_DEGER)
+        self.lbl_fan.pack(anchor="w", pady=6)
+        
+        # Serial communication connection information
+
+        bag = ttk.Labelframe(icerik, text="📡 Bağlantı Bilgileri", padding=15, bootstyle="secondary")
+        bag.pack(fill="x", pady=12)
+        
+        bag_row = ttk.Frame(bag)
+        bag_row.pack()
+        ttk.Label(bag_row, text=f"Port: {COM_PORT_AC}", font=FONT_ETIKET).pack(side="left", padx=20)
+        ttk.Label(bag_row, text=f"Hız: {BAUD_RATE}", font=FONT_ETIKET).pack(side="left", padx=20)
+        
+        # Desired temperature setting
+
+        ayar = ttk.Labelframe(icerik, text="🌡️ Hedef Sıcaklık Ayarı", padding=20, bootstyle="primary")
+        ayar.pack(fill="x", pady=12)
+        
+        giris = ttk.Frame(ayar)
+        giris.pack(pady=10)
+        
+        ttk.Label(giris, text=f"Sıcaklık ({TEMP_MIN:.0f}-{TEMP_MAX:.0f} °C):", font=FONT_ETIKET).pack(side="left", padx=5)
+        
+        self.sicaklik_entry = ttk.Entry(giris, width=10, font=FONT_ETIKET)
+        self.sicaklik_entry.pack(side="left", padx=10)
+        
+        self.uygula_btn = ttk.Button(giris, text="Uygula", command=self._sicaklik_uygula,
+                                     bootstyle="success", width=12)
+        self.uygula_btn.pack(side="left", padx=10)
+        
+        if not self.controller.klima_bagli:
+            self.uygula_btn.config(state="disabled")
+            ttk.Label(ayar, text="⚠️ Klima kartı bağlı değil", font=FONT_KUCUK, bootstyle="warning").pack()
+    
+    def aktif_ol(self):
+        self._verileri_guncelle()
+    
+    def _verileri_guncelle(self):
+        api = self.controller.klima_api
+        if api and self.controller.klima_bagli:
+            try:
+                api.update()
+                self.lbl_ortam.config(text=f"Ortam Sıcaklığı: {api.getAmbientTemp():.1f} °C")
+                self.lbl_hedef.config(text=f"Hedef Sıcaklık: {api.getDesiredTemp():.1f} °C")
+                self.lbl_fan.config(text=f"Fan Hızı: {api.getFanSpeed()} rps")
+            except:
+                self._na()
+        else:
+            self._na()
+        self.controller.guncelleme_planla(self._verileri_guncelle)
+    
+    def _na(self):
+        self.lbl_ortam.config(text="Ortam Sıcaklığı: N/A")
+        self.lbl_hedef.config(text="Hedef Sıcaklık: N/A")
+        self.lbl_fan.config(text="Fan Hızı: N/A")
+    
+    def _sicaklik_uygula(self):
+        deger = self.sicaklik_entry.get().strip()
+        if not deger:
+            messagebox.showerror("Hata", "Lütfen bir sıcaklık değeri giriniz.")
+            return
+        try:
+            sicaklik = float(deger)
+        except:
+            messagebox.showerror("Hata", "Geçersiz değer! Sayısal bir değer giriniz.")
+            return
+        if sicaklik < TEMP_MIN or sicaklik > TEMP_MAX:
+            messagebox.showerror("Hata", f"Sıcaklık {TEMP_MIN:.0f}-{TEMP_MAX:.0f}°C arasında olmalı.")
+            return
+        
+        api = self.controller.klima_api
+        if api and api.setDesiredTemp(round(sicaklik, 1)):
+            messagebox.showinfo("Başarılı", f"Hedef sıcaklık {sicaklik:.1f}°C ayarlandı.")
+            self.sicaklik_entry.delete(0, 'end')
+        else:
+            messagebox.showerror("Hata", "Sıcaklık ayarlanamadı.")
+
+
+# =============================================================================
+# CURTAIN FRAME
+# =============================================================================
+class PerdeFrame(ttk.Frame):
+    """Perde & Dış Ortam Kontrol. SLIDER YOK."""
+    
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        
+        self._arayuz_olustur()
+    
+    def _arayuz_olustur(self):
+      
+        ust = ttk.Frame(self)
+        ust.grid(row=0, column=0, sticky="ew", padx=20, pady=15)
+        
+        ttk.Button(ust, text="◀ Geri",
+                   command=lambda: self.controller.sayfa_goster("AnaMenuFrame"),
+                   bootstyle="secondary-outline", width=12).pack(side="left")
+        
+        ttk.Label(ust, text="🪟 Perde & Dış Ortam", font=FONT_BASLIK,
+                  foreground="white").pack(side="left", padx=25)
+        
+        
+        icerik = ttk.Frame(self)
+        icerik.grid(row=1, column=0, sticky="n", padx=40, pady=10)
+        
+        
+        dis = ttk.Labelframe(icerik, text="🌤️ Dış Ortam Verileri", padding=15, bootstyle="info")
+        dis.pack(fill="x", pady=10)
+        
+        dis_row = ttk.Frame(dis)
+        dis_row.pack()
+        
+        self.lbl_dis_sicaklik = ttk.Label(dis_row, text="Dış Sıcaklık: N/A", font=FONT_DEGER)
+        self.lbl_dis_sicaklik.pack(side="left", padx=15)
+        
+        self.lbl_dis_basinc = ttk.Label(dis_row, text="Dış Basınç: N/A", font=FONT_DEGER)
+        self.lbl_dis_basinc.pack(side="left", padx=15)
+        
+        self.lbl_isik = ttk.Label(dis_row, text="Işık Şiddeti: N/A", font=FONT_DEGER)
+        self.lbl_isik.pack(side="left", padx=15)
+        
+        # Curtain status
+        perde = ttk.Labelframe(icerik, text="🪟 Perde Durumu", padding=15, bootstyle="success")
+        perde.pack(fill="x", pady=10)
+        
+        perde_row = ttk.Frame(perde)
+        perde_row.pack()
+        
+        self.lbl_perde_hedef = ttk.Label(perde_row, text="Hedef: N/A", font=FONT_DEGER)
+        self.lbl_perde_hedef.pack(side="left", padx=25)
+        
+        self.lbl_perde_mevcut = ttk.Label(perde_row, text="Mevcut: N/A", font=FONT_DEGER)
+        self.lbl_perde_mevcut.pack(side="left", padx=25)
+        
+        
+        bag = ttk.Labelframe(icerik, text="📡 Bağlantı Bilgileri", padding=15, bootstyle="secondary")
+        bag.pack(fill="x", pady=10)
+        
+        bag_row = ttk.Frame(bag)
+        bag_row.pack()
+        ttk.Label(bag_row, text=f"Port: {COM_PORT_CURTAIN}", font=FONT_ETIKET).pack(side="left", padx=20)
+        ttk.Label(bag_row, text=f"Hız: {BAUD_RATE}", font=FONT_ETIKET).pack(side="left", padx=20)
+        
+        # Curtaın setting
+        ayar = ttk.Labelframe(icerik, text="🎚️ Hedef Perde Ayarı", padding=20, bootstyle="primary")
+        ayar.pack(fill="x", pady=10)
+        
+        giris = ttk.Frame(ayar)
+        giris.pack(pady=10)
+        
+        ttk.Label(giris, text="Perde Açıklığı (0-100 %):", font=FONT_ETIKET).pack(side="left", padx=5)
+        
+        self.perde_entry = ttk.Entry(giris, width=10, font=FONT_ETIKET)
+        self.perde_entry.pack(side="left", padx=10)
+        
+        self.uygula_btn = ttk.Button(giris, text="Uygula", command=self._perde_uygula,
+                                     bootstyle="success", width=12)
+        self.uygula_btn.pack(side="left", padx=10)
+        
+        if not self.controller.perde_bagli:
+            self.uygula_btn.config(state="disabled")
+            ttk.Label(ayar, text="⚠️ Perde kartı bağlı değil", font=FONT_KUCUK, bootstyle="warning").pack()
+    
+    def aktif_ol(self):
+        self._verileri_guncelle()
+    
+    def _verileri_guncelle(self):
+        api = self.controller.perde_api
+        if api and self.controller.perde_bagli:
+            try:
+                api.update()
+                self.lbl_dis_sicaklik.config(text=f"Dış Sıcaklık: {api.getOutdoorTemp():.1f} °C")
+                self.lbl_dis_basinc.config(text=f"Dış Basınç: {api.getOutdoorPress():.1f} hPa")
+                self.lbl_isik.config(text=f"Işık Şiddeti: {api.getLightIntensity():.0f} Lux")
+                self.lbl_perde_hedef.config(text=f"Hedef: {api.getDesiredCurtain():.1f}%")
+                self.lbl_perde_mevcut.config(text=f"Mevcut: {api.getCurtainStatus():.1f}%")
+            except:
+                self._na()
+        else:
+            self._na()
+        self.controller.guncelleme_planla(self._verileri_guncelle)
+    
+    def _na(self):
+        self.lbl_dis_sicaklik.config(text="Dış Sıcaklık: N/A")
+        self.lbl_dis_basinc.config(text="Dış Basınç: N/A")
+        self.lbl_isik.config(text="Işık Şiddeti: N/A")
+        self.lbl_perde_hedef.config(text="Hedef: N/A")
+        self.lbl_perde_mevcut.config(text="Mevcut: N/A")
+    
+    def _perde_uygula(self):
+        deger = self.perde_entry.get().strip()
+        if not deger:
+            messagebox.showerror("Hata", "Lütfen bir yüzde değeri giriniz.")
+            return
+        try:
+            yuzde = float(deger)
+        except:
+            messagebox.showerror("Hata", "Geçersiz değer! 0-100 arası sayı giriniz.")
+            return
+        if yuzde < 0 or yuzde > 100:
+            messagebox.showerror("Hata", "Yüzde 0-100 arasında olmalı.")
+            return
+        
+        api = self.controller.perde_api
+        if api and api.setCurtainStatus(round(yuzde, 1)):
+            messagebox.showinfo("Başarılı", f"Hedef perde %{yuzde:.1f} ayarlandı.")
+            self.perde_entry.delete(0, 'end')
+        else:
+            messagebox.showerror("Hata", "Perde ayarlanamadı.")
+
+# =============================================================================
+# APPLICATION STARTUP
+# =============================================================================
+
 if __name__ == "__main__":
-    app = HomeAutomationGUI()
-    app.master.mainloop()
+    print("=" * 60)
+    print("Akıllı Ev Otomasyon Sistemi - GUI")
+    print(f"Board #1 (Klima): {COM_PORT_AC}")
+    print(f"Board #2 (Perde): {COM_PORT_CURTAIN}")
+    print(f"Arka plan: {BG_PATH}")
+    print("=" * 60)
+    
+    app = AkilliEvApp()
+    app.calistir()
